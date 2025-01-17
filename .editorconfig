@@ -28,7 +28,8 @@ indent_style = tab
 max_line_length = 80
 # tabs are allowed, but spaces is a pep8 convention... //indent_style = tab
 
-[*.sol]
+[*.{sol,move}]
+max_line_length = 96
 indent_style = space
 indent_size = 4
 
