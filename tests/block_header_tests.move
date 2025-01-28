@@ -1,6 +1,5 @@
 #[test_only]
-module bitcoin_spv::btc_types_test;
-
+module bitcoin_spv::block_header_tests;
 use bitcoin_spv::block_header::{new_block_header, EPoW};
 use bitcoin_spv::btc_math::to_u32;
 

@@ -1,7 +1,6 @@
 module bitcoin_spv::block_header;
 
-use bitcoin_spv::btc_math::{btc_hash, to_u32, to_u256};
-use bitcoin_spv::difficulty::bits_to_target;
+use bitcoin_spv::btc_math::{btc_hash, to_u32, bits_to_target, to_u256};
 use bitcoin_spv::utils;
 
 // === Constants ===
