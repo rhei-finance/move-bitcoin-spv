@@ -1,9 +1,8 @@
 #[test_only]
 module bitcoin_spv::difficulty_test;
 
-use bitcoin_spv::bitcoin_spv::{mainnet_params, new_light_client};
+use bitcoin_spv::bitcoin_spv::{mainnet_params, new_light_client, retarget_algorithm, calc_next_required_difficulty};
 use bitcoin_spv::light_block::{new_light_block};
-use bitcoin_spv::difficulty::{calc_next_required_difficulty, retarget_algorithm};
 use bitcoin_spv::btc_math::{bits_to_target, target_to_bits};
 
 use sui::dynamic_object_field as dof;
@@ -60,24 +59,18 @@ fun difficulty_computation_test() {
     let p = mainnet_params();
     let mut lc = new_light_client(p, scenario.ctx());
 
-
     let last_block = new_light_block(
 	    860831u256,
 	    x"0040a320aa52a8971f61e56bf5a45117e3e224eabfef9237cb9a0100000000000000000060a9a5edd4e39b70ee803e3d22673799ae6ec733ea7549442324f9e3a790e4e4b806e1665b250317807427ca",
 	    scenario.ctx()
     );
-
-    dof::add(lc.client_id_mut(), 860831u256, last_block);
-
+    lc.add_light_block(last_block);
     let first_block = new_light_block(
 	    858816u256,
 	    x"0060b0329fd61df7a284ba2f7debbfaef9c5152271ef8165037300000000000000000000562139850fcfc2eb3204b1e790005aaba44e63a2633252fdbced58d2a9a87e2cdb34cf665b250317245ddc6a",
 	    scenario.ctx()
     );
-
-
-
-    dof::add(lc.client_id_mut(), 858816u256, first_block);
+    lc.add_light_block(first_block);
 
     let new_bits = calc_next_required_difficulty(&lc, dof::borrow(lc.client_id(), 860831u256), 0);
 
