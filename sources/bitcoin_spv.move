@@ -22,16 +22,27 @@ public struct LightClient has key, store {
     finalized_height: u256
 }
 
+
 // === Init function for module ====
 fun init(_ctx: &mut TxContext) {}
 
-public fun new_light_client(params: Params, ctx: &mut TxContext): LightClient {
-    let lc = LightClient {
+public fun new_light_client(params: Params, start_height: u256, start_headers: vector<vector<u8>>, ctx: &mut TxContext): LightClient {
+    let mut lc = LightClient {
 	    id: object::new(ctx),
 	    params: params,
         finalized_height: 0,
     };
 
+    if (!start_headers.is_empty()) {
+        let mut height = start_height;
+        start_headers.do!(|header| {
+            let light_block = new_light_block(height, header, ctx);
+            lc.set_light_block(light_block);
+            height = height + 1;
+        });
+
+        lc.finalized_height = height - 1;
+    };
     return lc
 }
 
@@ -42,6 +53,38 @@ public fun mainnet_params(): Params {
 	    blocks_pre_retarget: 2016,
 	    target_timespan: 2016 * 60 * 10, // time in seconds when we update the target: 2016 blocks ~ 2 weeks.
     }
+}
+
+// default params for bitcoin testnet
+public fun testnet_params(): Params {
+    return Params {
+	    power_limit: 0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff,
+	    blocks_pre_retarget: 2016,
+	    target_timespan: 2016 * 60 * 10, // time in seconds when we update the target difficulty: 2016 blocks ~ 2 weeks.
+    }
+}
+
+// default params for bitcoin regtest
+public fun regtest_params(): Params {
+    return Params {
+	    power_limit: 0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff,
+	    blocks_pre_retarget: 2016,
+	    target_timespan: 2016 * 60 * 10, // time in seconds when we update the target: 2016 blocks ~ 2 weeks.
+    }
+}
+
+
+// initializes Bitcoin light client by providing a trusted snapshot height and header
+public fun new_btc_light_client(
+    network: u256, start_height: u256, start_headers: vector<vector<u8>>, ctx: &mut TxContext
+)  {
+    let params = match (network) {
+        0 => mainnet_params(),
+            1 => testnet_params(),
+            _ => regtest_params()
+    };
+    let lc = new_light_client(params, start_height, start_headers, ctx);
+    transfer::share_object(lc);
 }
 
 // === Entry methods ===
