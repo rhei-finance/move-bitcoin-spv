@@ -109,7 +109,7 @@ fun test_insert_header_failed_difficulty_not_match() {
 }
 
 #[test_only]
-// s a sample valid (height, tx_id, proof, tx_index)
+// a sample valid (height, tx_id, proof, tx_index)
 fun sample_data(): (u256, vector<u8>, vector<vector<u8>>, u256) {
     let height = 858816u256;
     let tx_id = x"a1a81fcc85f94d84a7920aadf456c64a93ffab20dba7066124ba9bd7ef2b262a";

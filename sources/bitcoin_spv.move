@@ -24,7 +24,15 @@ public struct LightClient has key, store {
 
 
 // === Init function for module ====
-fun init(_ctx: &mut TxContext) {}
+fun init(ctx: &mut TxContext) {
+    let p = mainnet_params();
+    let mut lc = new_light_client(p, ctx);
+    let raw_header = x"010000009d6f4e09d579c93015a83e9081fee83a5c8b1ba3c86516b61f0400000000000025399317bb5c7c4daefe8fe2c4dfac0cea7e4e85913cd667030377240cadfe93a4906b50087e051a84297df7";
+    let lb = new_light_block(201600, raw_header , ctx);
+    lc.set_light_block(lb);
+    lc.finalized_height = 201600;
+    transfer::transfer(lc, tx_context::sender(ctx));
+}
 
 public fun new_light_client(params: Params, start_height: u256, start_headers: vector<vector<u8>>, ctx: &mut TxContext): LightClient {
     let mut lc = LightClient {
