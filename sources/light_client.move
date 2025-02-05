@@ -15,6 +15,7 @@ public struct Params has store{
     blocks_pre_retarget: u64,
     /// time in seconds when we update the target
     target_timespan: u64,
+    pow_no_retargeting: bool
 }
 
 // default params for bitcoin mainnet
@@ -23,6 +24,7 @@ public fun mainnet_params(): Params {
         power_limit: 0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff,
         blocks_pre_retarget: 2016,
         target_timespan: 2016 * 60 * 10, // ~ 2 weeks.
+        pow_no_retargeting: false,
     }
 }
 
@@ -37,21 +39,25 @@ public fun regtest_params(): Params {
         power_limit: 0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff,
         blocks_pre_retarget: 2016,
         target_timespan: 2016 * 60 * 10,  // ~ 2 weeks.
+        pow_no_retargeting: true,
     }
 }
 
-public fun blocks_pre_retarget(p: &Params) : u64{
-    return p.blocks_pre_retarget
+public fun blocks_pre_retarget(p: &Params) : u64 {
+    p.blocks_pre_retarget
 }
 
 public fun power_limit(p: &Params): u256 {
-    return p.power_limit
+    p.power_limit
 }
 
 public fun target_timespan(p: &Params): u64 {
     p.target_timespan
 }
 
+public fun pow_no_retargeting(p: &Params): bool {
+    p.pow_no_retargeting
+}
 /*
  * Light Client
  */
@@ -185,6 +191,12 @@ public fun calc_next_required_difficulty(c: &LightClient, last_block: &LightBloc
     // TODO: handle lastHeader is nil or genesis block
     let params = c.params();
     let blocks_pre_retarget = params.blocks_pre_retarget();
+
+
+    if (params.pow_no_retargeting() || last_block.height() == 0) {
+        let power_limit = params.power_limit();
+        return target_to_bits(power_limit)
+    };
 
     // if this block not start a new retarget cycle
     if ((last_block.height() + 1) % blocks_pre_retarget != 0) {
