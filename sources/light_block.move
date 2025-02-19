@@ -1,18 +1,18 @@
 module bitcoin_spv::light_block;
 
-use bitcoin_spv::block_header::{BlockHeader, new_block_header};
+use bitcoin_spv::block_header::BlockHeader;
 
-public struct LightBlock has key, store {
-    id: UID,
+public struct LightBlock has copy, store, drop {
     height: u64,
+    chain_work: u256, // total work
     header: BlockHeader
 }
 
-public fun new_light_block(height: u64, block_header: vector<u8>, ctx: &mut TxContext): LightBlock {
+public fun new_light_block(height: u64, header: BlockHeader, chain_work: u256): LightBlock {
     LightBlock {
-        id: object::new(ctx),
         height,
-        header: new_block_header(block_header)
+        chain_work,
+        header: header
     }
 }
 
@@ -26,4 +26,8 @@ public fun height(lb: &LightBlock): u64 {
 
 public fun header(lb: &LightBlock): &BlockHeader {
     return &lb.header
+}
+
+public fun chain_work(lb: &LightBlock): u256 {
+    lb.chain_work
 }
