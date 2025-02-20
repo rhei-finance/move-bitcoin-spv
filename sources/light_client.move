@@ -109,8 +109,10 @@ public(package) fun new_light_client_with_params(params: Params, start_height: u
 
         lc.finalized_height = height - 1;
     };
+
     return lc
 }
+
 
 // Helper function to initialize new light client.
 // network: 0 = mainnet, 1 = testnet
@@ -139,6 +141,7 @@ public(package) fun insert_header(c: &mut LightClient, parent_block_hash: vector
     assert!(parent_header.block_hash() == next_header.prev_block(), EBlockHashNotMatch);
     let next_block_difficulty = calc_next_required_difficulty(c, parent_block, 0);
     assert!(next_block_difficulty == next_header.bits(), EDifficultyNotMatch);
+
 
     // https://learnmeabitcoin.com/technical/block/time
     // we only check the case "A timestamp greater than the median time of the last 11 blocks".
