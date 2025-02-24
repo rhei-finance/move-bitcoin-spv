@@ -21,6 +21,8 @@ public struct Params has store{
     /// time in seconds when we update the target
     target_timespan: u64,
     pow_no_retargeting: bool,
+    reduce_min_difficulty: bool, // for Bitcoin testnet
+    min_diff_reduction_time: u32,  // time in seconds
 }
 
 // default params for bitcoin mainnet
@@ -30,12 +32,21 @@ public fun mainnet_params(): Params {
         blocks_pre_retarget: 2016,
         target_timespan: 2016 * 60 * 10, // ~ 2 weeks.
         pow_no_retargeting: false,
+        reduce_min_difficulty: false,
+        min_diff_reduction_time: 0,
     }
 }
 
 // default params for bitcoin testnet
 public fun testnet_params(): Params {
-    return mainnet_params()
+    return Params {
+        power_limit: 0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff,
+        blocks_pre_retarget: 2016,
+        target_timespan: 2016 * 60 * 10, // ~ 2 weeks.
+        pow_no_retargeting: false,
+        reduce_min_difficulty: true,
+        min_diff_reduction_time: 20 * 60, // 20 minutes
+    }
 }
 
 // default params for bitcoin regtest
@@ -46,6 +57,8 @@ public fun regtest_params(): Params {
         blocks_pre_retarget: 2016,
         target_timespan: 2016 * 60 * 10,  // ~ 2 weeks.
         pow_no_retargeting: true,
+        reduce_min_difficulty: false,
+        min_diff_reduction_time: 20 * 60, // 20 minutes
     }
 }
 
@@ -65,6 +78,13 @@ public fun pow_no_retargeting(p: &Params): bool {
     p.pow_no_retargeting
 }
 
+public fun reduce_min_difficulty(p: &Params): bool {
+    p.reduce_min_difficulty
+}
+
+public fun min_diff_reduction_time(p: &Params): u32 {
+    p.min_diff_reduction_time
+}
 /*
  * Light Client
  */
@@ -132,14 +152,13 @@ public fun new_light_client(
 // insert new header to bitcoin spv
 // parent: hash of the parent block, must be already recorded in the light client.
 // NOTE: this function doesn't do fork checks and overwrites the current fork. So it must be only called internally.
-// NOTE: this function doesn't do fork checks and overwrites the current fork. So it must be only called internally.
 public(package) fun insert_header(c: &mut LightClient, parent_block_hash: vector<u8>, next_header: BlockHeader): vector<u8> {
     let parent_block = c.get_light_block_by_hash(parent_block_hash);
     let parent_header = parent_block.header();
 
     // verify new header
     assert!(parent_header.block_hash() == next_header.prev_block(), EBlockHashNotMatch);
-    let next_block_difficulty = calc_next_required_difficulty(c, parent_block, 0);
+    let next_block_difficulty = calc_next_required_difficulty(c, parent_block, next_header.timestamp());
     assert!(next_block_difficulty == next_header.bits(), EDifficultyNotMatch);
 
 
@@ -232,12 +251,11 @@ public fun relative_ancestor(c: &LightClient, lb: &LightBlock, distance: u64): &
 
 // last_block is a new block that we are adding. The function calculates the required difficulty for the block
 // after the passed the `last_block`.
-public fun calc_next_required_difficulty(c: &LightClient, last_block: &LightBlock, _new_block_time: u32) : u32 {
+public fun calc_next_required_difficulty(c: &LightClient, last_block: &LightBlock, new_block_time: u32) : u32 {
     // reference from https://github.com/btcsuite/btcd/blob/master/blockchain/difficulty.go#L136
     // TODO: handle lastHeader is nil or genesis block
     let params = c.params();
     let blocks_pre_retarget = params.blocks_pre_retarget();
-
 
     if (params.pow_no_retargeting() || last_block.height() == 0) {
         let power_limit = params.power_limit();
@@ -247,11 +265,18 @@ public fun calc_next_required_difficulty(c: &LightClient, last_block: &LightBloc
     // if this block not start a new retarget cycle
     if ((last_block.height() + 1) % blocks_pre_retarget != 0) {
 
-        // TODO: support ReduceMinDifficulty params
-        // if c.params().reduce_min_difficulty {
-        //     ...
-        //     new_block_time is using in this logic
-        // }
+        if (params.reduce_min_difficulty()) {
+            let reduction_time = params.min_diff_reduction_time();
+            let allow_min_time = last_block.header().timestamp() + reduction_time;
+            if (new_block_time > allow_min_time) {
+                // TODO: add power limit bits to params
+                let power_limit = params.power_limit();
+                return target_to_bits(power_limit)
+            };
+
+            return find_prev_testnet_difficulty(c, last_block)
+
+        };
 
         // Return previous block difficulty
         return last_block.header().bits()
@@ -268,6 +293,31 @@ public fun calc_next_required_difficulty(c: &LightClient, last_block: &LightBloc
     let new_target = retarget_algorithm(c.params(), previous_target, first_timestamp as u64, last_timestamp as u64);
     let new_bits = target_to_bits(new_target);
     return new_bits
+}
+
+public(package) fun find_prev_testnet_difficulty(c: &LightClient, start_node: &LightBlock): u32 {
+    let mut iter_block = start_node;
+    let p = c.params();
+    let power_limit_bits = target_to_bits(p.power_limit());
+
+    let mut height = iter_block.height();
+    let mut bits = iter_block.header().bits();
+
+    while (
+        height != 0 &&
+        height % p.blocks_pre_retarget() != 0 &&
+        bits == power_limit_bits
+    ){
+        iter_block = c.relative_ancestor(iter_block, 1); // parent_block
+        height = iter_block.height();
+        bits = iter_block.header().bits();
+    };
+
+    if (height != 0) {
+        return bits
+    };
+
+    return power_limit_bits
 }
 
 /// compute new target
@@ -355,6 +405,11 @@ public(package) fun set_block_hash_by_height(c: &mut LightClient, height: u64, b
 public fun get_block_hash_by_height(c: &LightClient, height: u64): vector<u8> {
     // copy the block hash
     *df::borrow<u64, vector<u8>>(c.client_id(), height)
+}
+
+public fun get_light_block_by_height(c: &LightClient, height: u64): &LightBlock {
+    let block_hash = c.get_block_hash_by_height(height);
+    c.get_light_block_by_hash(block_hash)
 }
 
 public(package) fun set_latest_block(c: &mut LightClient, light_block: LightBlock) {
